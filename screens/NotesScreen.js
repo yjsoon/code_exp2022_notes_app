@@ -1,17 +1,55 @@
 import React, { useState, useEffect } from "react";
 import { TouchableOpacity, Text, View, FlatList, StyleSheet } from "react-native";
-import { Entypo } from "@expo/vector-icons";
+import { Entypo, Ionicons } from "@expo/vector-icons";
+import * as SQLite from "expo-sqlite";
 
-export default function NotesScreen({ navigation }) {
-  // Create state variable for our notes
-  const [notes, setNotes] = useState([
-    { title: "Walk the dog", done: false, id: "0" },
-    { title: "Water the plants", done: false, id: "" },
-  ]);
+const db = SQLite.openDatabase("notes.db");
+
+export default function NotesScreen({ navigation, route }) {
+
+  const [notes, setNotes] = useState([]);
+
+  function refreshNotes() {
+      db.transaction((tx) => {
+          tx.executeSql(
+              "SELECT * FROM notes",
+              null,
+              (txObj, { rows: { _array } }) => setNotes(_array),
+              (txObj, error) => console.log("Error ", error)
+          )
+      })
+  }
+
+  useEffect(() => {
+    db.transaction((tx) => {
+        tx.executeSql(
+            `CREATE TABLE IF NOT EXISTS
+            notes
+            (id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            done INT);`
+        );
+    }, null, refreshNotes);
+  }, []);
 
   function addNote() {
     navigation.navigate("Add Note");
   }
+
+  function deleteNote(id) {
+      db.transaction((tx) => {
+          tx.executeSql(`DELETE FROM notes WHERE id=${id}`)
+      }, null, refreshNotes);
+  }
+
+  useEffect(() => {
+    if (route.params?.text) {
+        db.transaction((tx) => {
+            tx.executeSql("INSERT INTO notes (done, title) VALUES (0, ?)", [route.params.text]);
+        }, null, refreshNotes)
+    }
+  }, [route.params?.text])
+
 
   // This adds the new note button in the header
   useEffect(() => {
@@ -39,9 +77,17 @@ export default function NotesScreen({ navigation }) {
           paddingBottom: 20,
           borderBottomColor: "#ccc",
           borderBottomWidth: 1,
+          flexDirection: "row",
+          justifyContent: "space-between"
         }}
       >
         <Text style={{ fontSize: 16, textAlign: "left" }}>{item.title}</Text>
+        <TouchableOpacity onPress={() => deleteNote(item.id)}>
+            <Ionicons
+                name="trash"
+                size={16}
+                color="#944" />
+        </TouchableOpacity>
       </View>
     );
   }
